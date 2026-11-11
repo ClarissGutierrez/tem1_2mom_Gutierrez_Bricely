@@ -106,3 +106,30 @@ Los 9.994 registros no presentan duplicados, valores nulos ni errores en fechas,
 
 ### Conclusión
 Los datos son consistentes y se pueden usar sin limpieza adicional en las siguientes preguntas.
+
+## Pregunta 3. Evolución comercial por región
+
+### Estrategia
+[pregunta3.sql](pregunta3.sql) tiene dos consultas con CTE sobre `ventas`. La primera agrupa ventas y ganancia por región y año, calcula el margen (ganancia / ventas × 100) y la variación anual de ventas con `LAG()` particionado por región. La segunda suma todos los años por región y usa `RANK()` para ubicar la mejor y la peor. Criterio: **ventas totales 2014–2017**; también muestro el ranking por ganancia y el margen para contrastar.
+
+```
+docker cp pregunta3.sql hive4_superstore:/tmp/pregunta3.sql
+docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta3.sql
+```
+
+### Resultados principales (ejecutados en Hive)
+
+| Región | Ventas 2014–2017 | Ganancia | Margen % | Rank ventas | Rank ganancia |
+|---|---|---|---|---|---|
+| West | 725.457,82 | 108.418,45 | 14,94 | 1 (mejor) | 1 |
+| East | 678.781,24 | 91.522,78 | 13,48 | 2 | 2 |
+| Central | 501.239,89 | 39.706,36 | 7,92 | 3 | 4 |
+| South | 391.721,91 | 46.749,43 | 11,93 | 4 (peor) | 3 |
+
+Ventas 2017 respecto a 2016: West +33,42 %, East +17,93 %, South +31,30 %, Central −0,22 %. El detalle por región y año (ventas, ganancia, margen y variación) sale en la primera consulta.
+
+### Interpretación
+West es la mejor región por ventas, ganancia y margen, y East la sigue de cerca. South vende menos, pero gana más que Central y tiene mejor margen. Central tiene el peor margen (7,92 %), que en 2014 fue solo 0,52 %, y en 2017 bajó de 13,50 % a 5,13 % con las ventas estancadas. East es la única región que creció todos los años.
+
+### Conclusión
+Según ventas, la mejor región es West y la peor South. Según rentabilidad, la peor es Central. Con ese criterio no coinciden, por lo que conviene revisar los costos y descuentos de Central.
