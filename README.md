@@ -151,3 +151,47 @@ Se utilizaron puntuaciones de 1 a 5 mediante `NTILE(5)`.
 ## Evidencias
 
 Las capturas de ejecución y resultados de cada pregunta están guardadas en la carpeta `evidencias`.
+
+## Pregunta 5. Ranking de productos según rentabilidad
+
+### Estrategia
+[pregunta5.sql](pregunta5.sql) crea la vista `productos_rank` con CTE, agrupando por `product_id` (1.862 productos). Cada producto lleva ventas, ganancia y margen (ganancia / ventas × 100), más cuatro columnas de posición:
+- `RANK()` por ganancia dentro de su categoría (`pos_categoria`).
+- `SUM() OVER` acumulado de la ganancia por categoría (`ganancia_acum_cat`).
+- `RANK()` por unidades vendidas, `SUM(quantity)` (`rank_unidades`).
+- `DENSE_RANK()` por margen, de menor a mayor (`rank_rentabilidad`).
+
+Tres consultas filtran los 5 mejores de cada ranking. Criterio de menor rentabilidad: **margen más bajo**. 32 `product_id` tienen más de un nombre; se toma uno con `MAX`. Ninguno tiene más de una categoría, y las ventas de la vista suman 2.297.200,86.
+
+```
+docker cp pregunta5.sql hive4_superstore:/tmp/pregunta5.sql
+docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta5.sql
+```
+
+### Resultados principales (ejecutados en Hive)
+
+Mayor ganancia por categoría (primer lugar de cada una):
+
+| Categoría | Producto | Ganancia | Margen % | Acumulado top 5 |
+|---|---|---|---|---|
+| Technology | Canon imageCLASS 2200 Advanced Copier | 25.199,93 | 40,91 | 45.275,07 |
+| Office Supplies | Fellowes PB500 Electric Punch Plastic Comb Binding Machine | 7.753,04 | 28,24 | 19.181,73 |
+| Furniture | Hon Deluxe Fabric Upholstered Stacking Chairs | 1.927,44 | 18,12 | 7.721,02 |
+
+Mayor volumen de ventas (por unidades, `SUM(quantity)`; el importe de ventas es información adicional):
+
+| Pos. | Producto | Unidades | Ventas |
+|---|---|---|---|
+| 1 | Logitech P710e Mobile Speakerphone | 75 | 11.203,76 |
+| 2 | Xerox 1908 | 70 | 2.167,35 |
+| 3 | GBC Premium Transparent Covers with Diagonal Lined Pattern | 67 | 780,46 |
+| 4 (empate) | Situations Contoured Folding Chairs, 4/Set | 64 | 3.641,27 |
+| 4 (empate) | Ibico Recycled Linen-Style Covers | 64 | 2.068,82 |
+
+Menor rentabilidad (margen): Eureka Disposable Bags (−275 %), Bush Westfield Bookcases (−210 %), Euro Pro Shark Stick Mini Vacuum (−190,71 %), Okidata B401 Printer (−140 %) y Zebra GK420t Printer (−133,33 %).
+
+### Interpretación
+En Technology, el Canon imageCLASS 2200 es el producto con más ganancia (25.199,93, margen de 41 %). Entre los productos con más unidades, el Xerox 1908 vende 70 unidades con margen de 46 %, pero otros como las Situations Contoured Folding Chairs (6 %) y los GBC Premium Covers (6 %) dejan poco margen. Los cinco de menor margen venden poco, pero todos pierden dinero; el Zebra GK420t, por ejemplo, pierde 938,28 con 703,71 en ventas.
+
+### Conclusión
+El producto más vendido en unidades (Logitech P710e, 75) no es el que más ingresa ni el que más gana. Las unidades vendidas no garantizan rentabilidad, y los productos con margen muy negativo deberían revisarse o retirarse.
