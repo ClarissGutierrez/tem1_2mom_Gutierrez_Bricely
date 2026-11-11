@@ -74,3 +74,35 @@ Los totales coinciden con los calculados directamente sobre el CSV.
 
 ### Conclusión
 Se cargaron los 9.994 registros sin pérdidas ni nulos. Se usó una tabla de paso en STRING porque el CSV trae fechas `M/d/yyyy`, comillas y códigos postales con ceros perdidos (438 de 4 dígitos, completados con `lpad`). La tabla `ventas` queda tipada y en ORC, lista para las siguientes preguntas.
+
+## Pregunta 2. Auditoría de calidad e integridad de datos
+
+### Estrategia
+Con [pregunta2.sql](pregunta2.sql): una consulta con `stack` sobre `stg_superstore` cuenta nulos o vacíos en las 21 columnas, y otra reúne en una tabla (`UNION ALL`) los controles de duplicados, fechas, ventas y descuentos. Las fechas inválidas se buscan en `stg_superstore`, porque en `ventas` ya estarían convertidas. El resto se revisa en `ventas`.
+
+Ejecución:
+```
+docker cp pregunta2.sql hive4_superstore:/tmp/pregunta2.sql
+docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta2.sql
+```
+
+### Resultados (ejecutados en Hive)
+
+| Control | Cantidad | Tratamiento propuesto |
+|---|---|---|
+| Total de registros | 9.994 | Referencia |
+| `row_id` duplicados | 0 | Conservar un registro por `row_id` |
+| Órdenes únicas | 5.009 | Referencia |
+| Clientes únicos | 793 | Referencia |
+| Nulos o vacíos (21 columnas) | 0 en todas | Imputar o excluir según el campo |
+| Fechas inválidas | 0 | Excluir o corregir desde la fuente |
+| Envío anterior al pedido | 0 | Excluir o intercambiar fechas |
+| Ventas ≤ 0 | 0 | Excluir del análisis de ventas |
+| Descuento fuera de 0–1 | 0 | Excluir o limitar a 0–1 |
+
+### Interpretación
+
+Los 9.994 registros no presentan duplicados, valores nulos ni errores en fechas, ventas o descuentos. Esto indica que los datos tienen buena calidad para realizar los análisis.
+
+### Conclusión
+Los datos son consistentes y se pueden usar sin limpieza adicional en las siguientes preguntas.
