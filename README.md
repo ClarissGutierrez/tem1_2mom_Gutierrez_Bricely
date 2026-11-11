@@ -1,28 +1,26 @@
-# Examen Práctico 2do Momento – Apache Hive
+# Examen Práctico – Apache Hive
 
 ## Descripción
 
-Análisis del dataset Sample Superstore utilizando Apache Hive. Contiene 9.994 registros de ventas y 21 columnas.
+Análisis de **Sample Superstore** (9.994 registros, 21 campos) mediante Apache Hive y HiveQL.
 
 ## Objetivo
 
-Cargar, organizar y analizar los datos mediante consultas HiveQL.
+Cargar los datos y analizar su calidad, ventas, clientes, productos y rentabilidad.
 
 ## Requisitos
 
-- Docker Desktop
-- Apache Hive 4.0.1
-- Archivo `Sample - Superstore.csv`
+Docker Desktop, imagen `apache/hive:4.0.1` y archivo `Sample - Superstore.csv`.
 
 ## Ejecución
 
-Iniciar Hive con Docker:
+Iniciar Hive:
 
 ```bash
 docker run -d --name hive4_superstore -p 10000:10000 -p 10002:10002 --env SERVICE_NAME=hiveserver2 apache/hive:4.0.1
 ```
 
-Convertir el CSV a UTF-8 desde PowerShell:
+Desde **PowerShell**, convertir el CSV a UTF-8 y copiarlo al contenedor:
 
 ```powershell
 $t = [IO.File]::ReadAllText("Sample - Superstore.csv", [Text.Encoding]::GetEncoding(1252))
@@ -30,232 +28,79 @@ $t = [IO.File]::ReadAllText("Sample - Superstore.csv", [Text.Encoding]::GetEncod
 docker cp superstore.csv hive4_superstore:/tmp/superstore.csv
 ```
 
-Ejecutar la primera pregunta:
+Ejecutar primero la Pregunta 1:
 
 ```bash
 docker cp pregunta1.sql hive4_superstore:/tmp/pregunta1.sql
 docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta1.sql
 ```
 
-Para las siguientes preguntas se utilizan los mismos dos comandos, cambiando `pregunta1.sql` por el archivo correspondiente.
+Para las preguntas 2 a 8, repetir los dos últimos comandos cambiando el número del archivo SQL. Las capturas de ejecución están en `evidencias/`.
 
 ## Pregunta 1. Modelo de datos
 
-Se creó una tabla temporal para leer el CSV y una tabla `ventas` en formato ORC con los tipos de datos correspondientes.
+Se cargó el CSV en `stg_superstore` y se creó `ventas` en formato ORC, convirtiendo fechas, números y códigos postales. **SQL:** [pregunta1.sql](pregunta1.sql).
 
-### Diccionario de datos
+**Diccionario de datos**
 
-| Campo | Tipo Hive | Descripción y restricciones |
+| Columna | Tipo Hive | Descripción y restricción |
 |---|---|---|
-| row_id | INT | ID de fila, único |
-| order_id | STRING | ID del pedido, puede repetirse |
-| order_date | DATE | Fecha del pedido, no nula |
-| ship_date | DATE | Fecha de envío, posterior o igual al pedido |
-| ship_mode | STRING | Tipo de envío |
-| customer_id | STRING | ID del cliente |
+| row_id | INT | Identificador de fila, único |
+| order_id | STRING | Identificador de pedido, puede repetirse |
+| order_date | DATE | Fecha de pedido, no posterior al envío |
+| ship_date | DATE | Fecha de envío, no anterior al pedido |
+| ship_mode | STRING | Modalidad de envío |
+| customer_id | STRING | Identificador del cliente |
 | customer_name | STRING | Nombre del cliente |
 | segment | STRING | Segmento del cliente |
 | country | STRING | País |
 | city | STRING | Ciudad |
 | state | STRING | Estado |
-| postal_code | STRING | Código postal de 5 dígitos |
+| postal_code | STRING | Código postal, conserva ceros iniciales |
 | region | STRING | Región |
-| product_id | STRING | ID del producto |
+| product_id | STRING | Identificador del producto |
 | category | STRING | Categoría |
 | sub_category | STRING | Subcategoría |
-| product_name | STRING | Nombre del producto |
-| sales | DECIMAL(12,4) | Venta, valor positivo esperado |
-| quantity | INT | Cantidad, mínimo 1 |
+| product_name | STRING | Nombre del producto, puede contener comas |
+| sales | DECIMAL(12,4) | Venta, se espera positiva |
+| quantity | INT | Unidades, mínimo esperado 1 |
 | discount | DECIMAL(4,2) | Descuento entre 0 y 1 |
 | profit | DECIMAL(12,4) | Ganancia, puede ser negativa |
 
-**Consulta:** `pregunta1.sql`
-
-**Resultado:** Se cargaron 9.994 registros, con 5.009 órdenes y 793 clientes únicos. Las ventas fueron 2.297.200,86 y las ganancias 286.397,02.
-
-**Interpretación:** Se conservaron todos los registros y se corrigió el formato de fechas y códigos postales.
-
-**Conclusión:** La tabla quedó preparada para los análisis.
+**Resultado:** 9.994 registros, 5.009 órdenes y 793 clientes; ventas de 2.297.200,86 y ganancias de 286.397,02. Los registros se conservaron y la tabla quedó lista para el análisis. [Evidencia](evidencias/pregunta1_registros.png).
 
 ## Pregunta 2. Calidad de datos
 
-Se revisaron registros duplicados, nulos, fechas, ventas y descuentos.
+Se buscaron duplicados, nulos, fechas incorrectas, ventas no positivas y descuentos fuera de rango. **SQL:** [pregunta2.sql](pregunta2.sql). **Resultado:** 9.994 registros y 0 errores en los controles realizados. Ante errores, corresponde revisar el origen y corregir o excluir los datos afectados. **Conclusión:** los datos son aptos para el análisis. [Evidencia](evidencias/pregunta2_calidad.png).
 
-**Consulta:** `pregunta2.sql`
+## Pregunta 3. Evolución comercial por región
 
-| Control | Resultado |
-|---|---|
-| Registros | 9.994 |
-| ID duplicados | 0 |
-| Órdenes únicas | 5.009 |
-| Clientes únicos | 793 |
-| Valores nulos o vacíos | 0 |
-| Fechas inválidas | 0 |
-| Envíos anteriores al pedido | 0 |
-| Ventas menores o iguales a cero | 0 |
-| Descuentos fuera de rango | 0 |
-
-**Tratamiento:** Si se encontraran errores, se revisarían los datos originales para corregirlos o excluir los registros afectados.
-
-**Interpretación:** No se encontraron inconsistencias en los controles realizados.
-
-**Conclusión:** Los datos pueden utilizarse para los siguientes análisis.
-
-## Pregunta 3. Ventas por región
-
-Se agruparon las ventas y ganancias por región y año. Se utilizaron CTE, `LAG()` para la variación anual y `RANK()` para la clasificación.
-
-**Consulta:** `pregunta3.sql`
-
-| Región | Ventas | Ganancia | Margen |
-|---|---|---|---|
-| West | 725.457,82 | 108.418,45 | 14,94 % |
-| East | 678.781,24 | 91.522,78 | 13,48 % |
-| Central | 501.239,89 | 39.706,36 | 7,92 % |
-| South | 391.721,91 | 46.749,43 | 11,93 % |
-
-**Interpretación:** West tiene las mayores ventas y ganancias. South registra las menores ventas y Central tiene el margen más bajo.
-
-**Conclusión:** West presenta el mejor desempeño general. Central necesita revisar su rentabilidad.
+Se agruparon ventas y ganancias por región y año; `LAG()` calculó la variación anual y `RANK()` el orden regional. **SQL:** [pregunta3.sql](pregunta3.sql). **Resultado:** West lideró en ventas (725.457,82), South tuvo las menores (391.721,91) y Central el menor margen (7,92 %). **Conclusión:** vender más no siempre implica mayor rentabilidad. [Evidencia](evidencias/pregunta3_ranking.png).
 
 ## Pregunta 4. Segmentación RFM
 
-Se clasificaron los clientes utilizando:
+Se calcularon recencia (hasta el 30/12/2017), órdenes únicas y ventas por cliente, con puntuaciones `NTILE(5)`. Criterios: alto valor (R≥4 y M≥4), en riesgo (R≤2 y (F≥3 o M≥3)), recurrente (F≥4, si no pertenece a los anteriores) y otros. **SQL:** [pregunta4.sql](pregunta4.sql). **Resultado:** 146 clientes de alto valor, 196 en riesgo, 125 recurrentes y 326 restantes. **Conclusión:** conviene mantener a los clientes de alto valor y recuperar los que están en riesgo. [Evidencia](evidencias/pregunta4_segmentos.png).
 
-- **Recency:** días desde la última compra, respecto al 30/12/2017.
-- **Frequency:** cantidad de órdenes únicas.
-- **Monetary:** total de ventas por cliente.
+## Pregunta 5. Ranking de productos
 
-Se utilizaron puntuaciones de 1 a 5 mediante `NTILE(5)`.
-
-**Criterios:**
-
-- Alto valor: R ≥ 4 y M ≥ 4.
-- En riesgo: R ≤ 2 y (F ≥ 3 o M ≥ 3).
-- Recurrente: F ≥ 4, si no pertenece a los anteriores.
-- Otros: clientes restantes.
-
-**Consulta:** `pregunta4.sql`
-
-| Segmento | Clientes | Ventas |
-|---|---|---|
-| Alto valor | 146 | 760.684,20 |
-| En riesgo | 196 | 689.323,63 |
-| Otros | 326 | 461.967,25 |
-| Recurrente | 125 | 385.225,78 |
-
-**Interpretación:** Los clientes de alto valor generan el 33,11 % de las ventas. Los clientes en riesgo representan el 30,01 % y llevan más tiempo sin comprar.
-
-**Conclusión:** Es importante mantener a los clientes de alto valor y recuperar a los clientes en riesgo.
-
-## Evidencias
-
-Las capturas de ejecución y resultados de cada pregunta están guardadas en la carpeta `evidencias`.
-
-## Pregunta 5. Ranking de productos según rentabilidad
-
-### Estrategia
-[pregunta5.sql](pregunta5.sql) crea la vista `productos_rank` con CTE, agrupando por `product_id` (1.862 productos). Cada producto lleva ventas, ganancia y margen (ganancia / ventas × 100), más cuatro columnas de posición:
-- `RANK()` por ganancia dentro de su categoría (`pos_categoria`).
-- `SUM() OVER` acumulado de la ganancia por categoría (`ganancia_acum_cat`).
-- `RANK()` por unidades vendidas, `SUM(quantity)` (`rank_unidades`).
-- `DENSE_RANK()` por margen, de menor a mayor (`rank_rentabilidad`).
-
-Tres consultas filtran los 5 mejores de cada ranking. Criterio de menor rentabilidad: **margen más bajo**. 32 `product_id` tienen más de un nombre; se toma uno con `MAX`. Ninguno tiene más de una categoría, y las ventas de la vista suman 2.297.200,86.
-
-```
-docker cp pregunta5.sql hive4_superstore:/tmp/pregunta5.sql
-docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta5.sql
-```
-
-### Resultados principales (ejecutados en Hive)
-
-Mayor ganancia por categoría (primer lugar de cada una):
-
-| Categoría | Producto | Ganancia | Margen % | Acumulado top 5 |
-|---|---|---|---|---|
-| Technology | Canon imageCLASS 2200 Advanced Copier | 25.199,93 | 40,91 | 45.275,07 |
-| Office Supplies | Fellowes PB500 Electric Punch Plastic Comb Binding Machine | 7.753,04 | 28,24 | 19.181,73 |
-| Furniture | Hon Deluxe Fabric Upholstered Stacking Chairs | 1.927,44 | 18,12 | 7.721,02 |
-
-Mayor volumen de ventas (por unidades, `SUM(quantity)`; el importe de ventas es información adicional):
-
-| Pos. | Producto | Unidades | Ventas |
-|---|---|---|---|
-| 1 | Logitech P710e Mobile Speakerphone | 75 | 11.203,76 |
-| 2 | Xerox 1908 | 70 | 2.167,35 |
-| 3 | GBC Premium Transparent Covers with Diagonal Lined Pattern | 67 | 780,46 |
-| 4 (empate) | Situations Contoured Folding Chairs, 4/Set | 64 | 3.641,27 |
-| 4 (empate) | Ibico Recycled Linen-Style Covers | 64 | 2.068,82 |
-
-Menor rentabilidad (margen): Eureka Disposable Bags (−275 %), Bush Westfield Bookcases (−210 %), Euro Pro Shark Stick Mini Vacuum (−190,71 %), Okidata B401 Printer (−140 %) y Zebra GK420t Printer (−133,33 %).
-
-### Interpretación
-En Technology, el Canon imageCLASS 2200 es el producto con más ganancia (25.199,93, margen de 41 %). Entre los productos con más unidades, el Xerox 1908 vende 70 unidades con margen de 46 %, pero otros como las Situations Contoured Folding Chairs (6 %) y los GBC Premium Covers (6 %) dejan poco margen. Los cinco de menor margen venden poco, pero todos pierden dinero; el Zebra GK420t, por ejemplo, pierde 938,28 con 703,71 en ventas.
-
-### Conclusión
-El producto más vendido en unidades (Logitech P710e, 75) no es el que más ingresa ni el que más gana. Las unidades vendidas no garantizan rentabilidad, y los productos con margen muy negativo deberían revisarse o retirarse.
+Se calcularon posiciones, márgenes, unidades y ganancias acumuladas mediante `RANK()`, `DENSE_RANK()` y `SUM() OVER`. **SQL:** [pregunta5.sql](pregunta5.sql). **Resultado:** Canon imageCLASS 2200 lideró en ganancia (25.199,93) y Logitech P710e en unidades (75). Los cinco de menor margen tuvieron pérdidas. **Conclusión:** vender más unidades no garantiza mayor ganancia. [Evidencias](evidencias/pregunta5_categorias.png).
 
 ## Pregunta 6. Impacto de los descuentos
 
-### Estrategia
-[pregunta6.sql](pregunta6.sql) tiene tres consultas sobre `ventas`. La primera clasifica cada registro con `CASE` según su descuento (sin descuento = 0, bajo ≤ 0,20, medio ≤ 0,50, alto > 0,50) y calcula ventas, ganancia, margen, registros con pérdidas (`profit < 0`), porcentaje de no rentables (`profit <= 0`) y descuento promedio. La segunda y la tercera suman las pérdidas por subcategoría (las 5 peores) y por categoría.
-
-```
-docker cp pregunta6.sql hive4_superstore:/tmp/pregunta6.sql
-docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta6.sql
-```
-
-### Resultados principales (ejecutados en Hive)
-
-| Rango | Registros | Ventas | Ganancia | Margen % | Con pérdidas | No rentables % | Desc. prom. % |
-|---|---|---|---|---|---|---|---|
-| Sin descuento | 4.798 | 1.087.908,47 | 320.987,60 | 29,51 | 0 | 0,63 | 0,00 |
-| Bajo | 3.803 | 846.522,24 | 100.785,47 | 11,91 | 523 | 14,33 | 19,68 |
-| Medio | 537 | 298.541,41 | −58.817,00 | −19,70 | 492 | 94,04 | 36,70 |
-| Alto | 856 | 64.228,74 | −76.559,05 | −119,20 | 856 | 100,00 | 71,89 |
-
-Los registros suman 9.994 y las ventas 2.297.200,86, igual que la Pregunta 1.
-
-Subcategorías con más pérdidas (suma de los `profit` negativos): Binders (−38.510,50; 613 registros con pérdida; descuento promedio 37,23 %), Tables (−32.412,15; ganancia total negativa), Machines (−30.118,67), Bookcases (−12.152,21) y Chairs (−9.880,84). Por categoría, Furniture acumula más pérdidas (−60.936,11) y tiene el mayor descuento promedio (17,39 %); Office Supplies tiene más registros con pérdida (886).
-
-### Interpretación
-Hasta un descuento de 20 % las ventas siguen siendo rentables (margen 11,91 %). Con descuento medio el margen ya es negativo, y con descuento alto los 856 registros pierden dinero: vendieron 64.228,74 y perdieron 76.559,05. Binders, Tables y Machines tienen descuentos promedio de 26 % a 37 %, y son las subcategorías con más pérdidas.
-
-### Conclusión
-Sí: los descuentos altos están asociados con más operaciones no rentables. El porcentaje sube de 0,63 % sin descuento a 14,33 % (bajo), 94,04 % (medio) y 100 % (alto). Conviene limitar los descuentos por encima de 20 %, sobre todo en Binders, Tables y Machines.
+Se compararon descuentos de 0 %, bajos (hasta 20 %), medios (hasta 50 %) y altos (más de 50 %), calculando ventas, ganancias, márgenes y pérdidas por rango y categoría. **SQL:** [pregunta6.sql](pregunta6.sql). **Resultado:** las operaciones no rentables representaron 0,63 %, 14,33 %, 94,04 % y 100 %, respectivamente. Furniture acumuló las mayores pérdidas. **Conclusión:** los descuentos altos se relacionan con más operaciones no rentables. [Evidencia](evidencias/pregunta6_descuentos.png).
 
 ## Pregunta 7. Tendencias temporales
 
-### Estrategia
-[pregunta7.sql](pregunta7.sql) crea la vista `tendencia_mensual` con CTE: suma ventas y ganancia por mes (`yyyy-MM`, 48 meses completos de 2014 a 2017). Sobre ese resultado calcula:
-- `LAG(ventas, 1)` para la variación contra el mes anterior.
-- `LAG(ventas, 12)` para la variación contra el mismo mes del año anterior.
-- `AVG() OVER` con ventana de 3 filas para el promedio móvil, que queda NULL hasta que haya 3 meses.
-- `RANK()` ascendente y descendente para los extremos.
+Se analizaron 48 meses con `LAG()` para variaciones mensuales e interanuales y promedio móvil de tres meses. **SQL:** [pregunta7.sql](pregunta7.sql). **Resultado:** noviembre de 2017 registró las mayores ventas (118.447,83) y febrero de 2014 las menores (4.519,89). **Conclusión:** las ventas muestran picos al final del año y caídas al inicio. [Evidencia](evidencias/pregunta7_ranking.png).
 
-Las divisiones usan `NULLIF(..., 0)` para evitar división entre cero. La primera consulta muestra los 48 meses en orden cronológico y la segunda, los tres meses con más y menos ventas.
+## Pregunta 8. Análisis Pareto
 
-```
-docker cp pregunta7.sql hive4_superstore:/tmp/pregunta7.sql
-docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta7.sql
-```
+Se ordenaron productos por ventas y ganancias, calculando porcentajes individuales y acumulados con `SUM() OVER`. **SQL:** [pregunta8.sql](pregunta8.sql). **Resultado:** 414 productos (22,23 %) alcanzan el 80 % de las ventas y 164 (8,81 %) el 80 % de la ganancia neta, considerando las pérdidas. **Conclusión:** las ganancias están más concentradas que las ventas. [Evidencia](evidencias/pregunta8_resumen.png).
 
-### Resultados principales (ejecutados en Hive)
+## Optimización
 
-| Tipo | Posición | Mes | Ventas | Ganancia |
-|---|---|---|---|---|
-| Mayor | 1 | 2017-11 | 118.447,83 | 9.690,10 |
-| Mayor | 2 | 2016-12 | 96.999,04 | 17.885,31 |
-| Mayor | 3 | 2017-09 | 87.866,65 | 10.991,56 |
-| Menor | 1 | 2014-02 | 4.519,89 | 862,31 |
-| Menor | 2 | 2015-02 | 11.951,41 | 2.813,85 |
-| Menor | 3 | 2014-01 | 14.236,90 | 2.450,19 |
+Se utilizó ORC para almacenamiento por columnas, tipos de datos adecuados y vistas para reutilizar cálculos. No se midieron tiempos comparativos de rendimiento.
 
-Otros datos de la serie: el mayor salto mensual fue marzo de 2014 (+1.132,13 % sobre febrero) y noviembre de 2017 creció 49,16 % frente a noviembre de 2016. El promedio móvil de 3 meses llegó a 94.697,13 en noviembre de 2017.
+## Conclusión general
 
-### Interpretación
-Las ventas tienen estacionalidad clara: septiembre, noviembre y diciembre son los meses fuertes de cada año, y enero y febrero los más bajos. Los meses con más ventas no siempre tienen más ganancia: noviembre de 2017 vendió más que diciembre de 2016, pero ganó casi la mitad. Frente al mismo mes del año anterior, 2017 fue mayormente positivo, con caídas en febrero, abril, mayo y diciembre.
-
-### Conclusión
-Las ventas crecen año a año con picos al final del año y caídas al inicio. Conviene reforzar inventario y campañas desde septiembre y planificar los meses bajos de enero y febrero.
+Los análisis permitieron identificar clientes y productos importantes, diferencias entre regiones y el impacto de los descuentos en las ganancias.
