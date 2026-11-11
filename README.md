@@ -195,3 +195,32 @@ En Technology, el Canon imageCLASS 2200 es el producto con más ganancia (25.199
 
 ### Conclusión
 El producto más vendido en unidades (Logitech P710e, 75) no es el que más ingresa ni el que más gana. Las unidades vendidas no garantizan rentabilidad, y los productos con margen muy negativo deberían revisarse o retirarse.
+
+## Pregunta 6. Impacto de los descuentos
+
+### Estrategia
+[pregunta6.sql](pregunta6.sql) tiene tres consultas sobre `ventas`. La primera clasifica cada registro con `CASE` según su descuento (sin descuento = 0, bajo ≤ 0,20, medio ≤ 0,50, alto > 0,50) y calcula ventas, ganancia, margen, registros con pérdidas (`profit < 0`), porcentaje de no rentables (`profit <= 0`) y descuento promedio. La segunda y la tercera suman las pérdidas por subcategoría (las 5 peores) y por categoría.
+
+```
+docker cp pregunta6.sql hive4_superstore:/tmp/pregunta6.sql
+docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta6.sql
+```
+
+### Resultados principales (ejecutados en Hive)
+
+| Rango | Registros | Ventas | Ganancia | Margen % | Con pérdidas | No rentables % | Desc. prom. % |
+|---|---|---|---|---|---|---|---|
+| Sin descuento | 4.798 | 1.087.908,47 | 320.987,60 | 29,51 | 0 | 0,63 | 0,00 |
+| Bajo | 3.803 | 846.522,24 | 100.785,47 | 11,91 | 523 | 14,33 | 19,68 |
+| Medio | 537 | 298.541,41 | −58.817,00 | −19,70 | 492 | 94,04 | 36,70 |
+| Alto | 856 | 64.228,74 | −76.559,05 | −119,20 | 856 | 100,00 | 71,89 |
+
+Los registros suman 9.994 y las ventas 2.297.200,86, igual que la Pregunta 1.
+
+Subcategorías con más pérdidas (suma de los `profit` negativos): Binders (−38.510,50; 613 registros con pérdida; descuento promedio 37,23 %), Tables (−32.412,15; ganancia total negativa), Machines (−30.118,67), Bookcases (−12.152,21) y Chairs (−9.880,84). Por categoría, Furniture acumula más pérdidas (−60.936,11) y tiene el mayor descuento promedio (17,39 %); Office Supplies tiene más registros con pérdida (886).
+
+### Interpretación
+Hasta un descuento de 20 % las ventas siguen siendo rentables (margen 11,91 %). Con descuento medio el margen ya es negativo, y con descuento alto los 856 registros pierden dinero: vendieron 64.228,74 y perdieron 76.559,05. Binders, Tables y Machines tienen descuentos promedio de 26 % a 37 %, y son las subcategorías con más pérdidas.
+
+### Conclusión
+Sí: los descuentos altos están asociados con más operaciones no rentables. El porcentaje sube de 0,63 % sin descuento a 14,33 % (bajo), 94,04 % (medio) y 100 % (alto). Conviene limitar los descuentos por encima de 20 %, sobre todo en Binders, Tables y Machines.
