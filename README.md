@@ -224,3 +224,38 @@ Hasta un descuento de 20 % las ventas siguen siendo rentables (margen 11,91 %). 
 
 ### Conclusión
 Sí: los descuentos altos están asociados con más operaciones no rentables. El porcentaje sube de 0,63 % sin descuento a 14,33 % (bajo), 94,04 % (medio) y 100 % (alto). Conviene limitar los descuentos por encima de 20 %, sobre todo en Binders, Tables y Machines.
+
+## Pregunta 7. Tendencias temporales
+
+### Estrategia
+[pregunta7.sql](pregunta7.sql) crea la vista `tendencia_mensual` con CTE: suma ventas y ganancia por mes (`yyyy-MM`, 48 meses completos de 2014 a 2017). Sobre ese resultado calcula:
+- `LAG(ventas, 1)` para la variación contra el mes anterior.
+- `LAG(ventas, 12)` para la variación contra el mismo mes del año anterior.
+- `AVG() OVER` con ventana de 3 filas para el promedio móvil, que queda NULL hasta que haya 3 meses.
+- `RANK()` ascendente y descendente para los extremos.
+
+Las divisiones usan `NULLIF(..., 0)` para evitar división entre cero. La primera consulta muestra los 48 meses en orden cronológico y la segunda, los tres meses con más y menos ventas.
+
+```
+docker cp pregunta7.sql hive4_superstore:/tmp/pregunta7.sql
+docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta7.sql
+```
+
+### Resultados principales (ejecutados en Hive)
+
+| Tipo | Posición | Mes | Ventas | Ganancia |
+|---|---|---|---|---|
+| Mayor | 1 | 2017-11 | 118.447,83 | 9.690,10 |
+| Mayor | 2 | 2016-12 | 96.999,04 | 17.885,31 |
+| Mayor | 3 | 2017-09 | 87.866,65 | 10.991,56 |
+| Menor | 1 | 2014-02 | 4.519,89 | 862,31 |
+| Menor | 2 | 2015-02 | 11.951,41 | 2.813,85 |
+| Menor | 3 | 2014-01 | 14.236,90 | 2.450,19 |
+
+Otros datos de la serie: el mayor salto mensual fue marzo de 2014 (+1.132,13 % sobre febrero) y noviembre de 2017 creció 49,16 % frente a noviembre de 2016. El promedio móvil de 3 meses llegó a 94.697,13 en noviembre de 2017.
+
+### Interpretación
+Las ventas tienen estacionalidad clara: septiembre, noviembre y diciembre son los meses fuertes de cada año, y enero y febrero los más bajos. Los meses con más ventas no siempre tienen más ganancia: noviembre de 2017 vendió más que diciembre de 2016, pero ganó casi la mitad. Frente al mismo mes del año anterior, 2017 fue mayormente positivo, con caídas en febrero, abril, mayo y diciembre.
+
+### Conclusión
+Las ventas crecen año a año con picos al final del año y caídas al inicio. Conviene reforzar inventario y campañas desde septiembre y planificar los meses bajos de enero y febrero.
