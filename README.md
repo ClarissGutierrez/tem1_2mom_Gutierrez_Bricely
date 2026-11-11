@@ -1,135 +1,153 @@
-# Examen Práctico 2do Momento – Superstore con Apache Hive
+# Examen Práctico 2do Momento – Apache Hive
 
 ## Descripción
-Proyecto individual de procesamiento y análisis del dataset Sample Superstore (9.994 filas, 21 columnas) usando Apache Hive.
+
+Análisis del dataset Sample Superstore utilizando Apache Hive. Contiene 9.994 registros de ventas y 21 columnas.
 
 ## Objetivo
-Modelar, cargar y analizar los datos de ventas con HiveQL. Este avance cubre la Pregunta 1: diseño del modelo de datos y carga.
+
+Cargar, organizar y analizar los datos mediante consultas HiveQL.
 
 ## Requisitos
+
 - Docker Desktop
-- Imagen `apache/hive:4.0.1`
-- Archivo `Sample - Superstore.csv` en la raíz del proyecto (codificado en Windows-1252, se convierte a UTF-8 antes de cargar)
+- Apache Hive 4.0.1
+- Archivo `Sample - Superstore.csv`
 
-## Procedimiento
-1. Levantar Hive:
-   ```
-   docker run -d --name hive4_superstore -p 10000:10000 -p 10002:10002 --env SERVICE_NAME=hiveserver2 apache/hive:4.0.1
-   ```
-2. Convertir el CSV a UTF-8 (PowerShell) y copiarlo al contenedor:
-   ```
-   $t = [IO.File]::ReadAllText("Sample - Superstore.csv", [Text.Encoding]::GetEncoding(1252))
-   [IO.File]::WriteAllText("superstore.csv", $t, (New-Object Text.UTF8Encoding $false))
-   docker cp superstore.csv hive4_superstore:/tmp/superstore.csv
-   ```
-3. Ejecutar el script:
-   ```
-   docker cp pregunta1.sql hive4_superstore:/tmp/pregunta1.sql
-   docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta1.sql
-   ```
+## Ejecución
 
-[pregunta1.sql](pregunta1.sql) carga el CSV en `stg_superstore` (todo STRING, con `OpenCSVSerde`) y llena la tabla analítica `ventas` (ORC) con los tipos correctos.
+Iniciar Hive con Docker:
 
-## Pregunta 1. Diseño e implementación del modelo de datos
+```bash
+docker run -d --name hive4_superstore -p 10000:10000 -p 10002:10002 --env SERVICE_NAME=hiveserver2 apache/hive:4.0.1
+```
+
+Convertir el CSV a UTF-8 desde PowerShell:
+
+```powershell
+$t = [IO.File]::ReadAllText("Sample - Superstore.csv", [Text.Encoding]::GetEncoding(1252))
+[IO.File]::WriteAllText("superstore.csv", $t, (New-Object Text.UTF8Encoding $false))
+docker cp superstore.csv hive4_superstore:/tmp/superstore.csv
+```
+
+Ejecutar la primera pregunta:
+
+```bash
+docker cp pregunta1.sql hive4_superstore:/tmp/pregunta1.sql
+docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta1.sql
+```
+
+Para las siguientes preguntas se utilizan los mismos dos comandos, cambiando `pregunta1.sql` por el archivo correspondiente.
+
+## Pregunta 1. Modelo de datos
+
+Se creó una tabla temporal para leer el CSV y una tabla `ventas` en formato ORC con los tipos de datos correspondientes.
 
 ### Diccionario de datos
 
-| Campo CSV | Columna Hive | Tipo | Descripción | Restricciones |
-|---|---|---|---|---|
-| Row ID | row_id | INT | Identificador de fila | Único, no nulo |
-| Order ID | order_id | STRING | Identificador del pedido | No nulo, se repite por línea |
-| Order Date | order_date | DATE | Fecha del pedido | No nula, ≤ ship_date |
-| Ship Date | ship_date | DATE | Fecha de envío | No nula, ≥ order_date |
-| Ship Mode | ship_mode | STRING | Modalidad de envío | No nulo |
-| Customer ID | customer_id | STRING | Identificador del cliente | No nulo |
-| Customer Name | customer_name | STRING | Nombre del cliente | No nulo |
-| Segment | segment | STRING | Segmento del cliente | No nulo |
-| Country | country | STRING | País | No nulo |
-| City | city | STRING | Ciudad | No nulo |
-| State | state | STRING | Estado | No nulo |
-| Postal Code | postal_code | STRING | Código postal de 5 dígitos | Texto, conserva ceros iniciales |
-| Region | region | STRING | Región (Central, East, South, West) | No nulo |
-| Product ID | product_id | STRING | Identificador del producto | No nulo |
-| Category | category | STRING | Categoría | No nulo |
-| Sub-Category | sub_category | STRING | Subcategoría | No nulo |
-| Product Name | product_name | STRING | Nombre del producto | No nulo, puede tener comas |
-| Sales | sales | DECIMAL(12,4) | Importe de la venta | Esperado > 0 |
-| Quantity | quantity | INT | Unidades vendidas | Esperado ≥ 1 |
-| Discount | discount | DECIMAL(4,2) | Descuento (fracción) | Esperado entre 0 y 1 |
-| Profit | profit | DECIMAL(12,4) | Ganancia | Puede ser negativa |
-
-### Resultados
-Consultas ejecutadas en Hive sobre `superstore.ventas`:
-
-| Verificación | Resultado |
-|---|---|
-| Registros en `stg_superstore` y `ventas` | 9.994 y 9.994 |
-| `row_id` únicos | 9.994 |
-| Rango de fechas | 2014-01-03 a 2017-12-30 |
-| Fechas o números nulos | 0 |
-| Órdenes / clientes únicos | 5.009 / 793 |
-| Ventas / ganancia total | 2.297.200,86 / 286.397,02 |
-
-Los totales coinciden con los calculados directamente sobre el CSV.
-
-### Conclusión
-Se cargaron los 9.994 registros sin pérdidas ni nulos. Se usó una tabla de paso en STRING porque el CSV trae fechas `M/d/yyyy`, comillas y códigos postales con ceros perdidos (438 de 4 dígitos, completados con `lpad`). La tabla `ventas` queda tipada y en ORC, lista para las siguientes preguntas.
-
-## Pregunta 2. Auditoría de calidad e integridad de datos
-
-### Estrategia
-Con [pregunta2.sql](pregunta2.sql): una consulta con `stack` sobre `stg_superstore` cuenta nulos o vacíos en las 21 columnas, y otra reúne en una tabla (`UNION ALL`) los controles de duplicados, fechas, ventas y descuentos. Las fechas inválidas se buscan en `stg_superstore`, porque en `ventas` ya estarían convertidas. El resto se revisa en `ventas`.
-
-Ejecución:
-```
-docker cp pregunta2.sql hive4_superstore:/tmp/pregunta2.sql
-docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta2.sql
-```
-
-### Resultados (ejecutados en Hive)
-
-| Control | Cantidad | Tratamiento propuesto |
+| Campo | Tipo Hive | Descripción y restricciones |
 |---|---|---|
-| Total de registros | 9.994 | Referencia |
-| `row_id` duplicados | 0 | Conservar un registro por `row_id` |
-| Órdenes únicas | 5.009 | Referencia |
-| Clientes únicos | 793 | Referencia |
-| Nulos o vacíos (21 columnas) | 0 en todas | Imputar o excluir según el campo |
-| Fechas inválidas | 0 | Excluir o corregir desde la fuente |
-| Envío anterior al pedido | 0 | Excluir o intercambiar fechas |
-| Ventas ≤ 0 | 0 | Excluir del análisis de ventas |
-| Descuento fuera de 0–1 | 0 | Excluir o limitar a 0–1 |
+| row_id | INT | ID de fila, único |
+| order_id | STRING | ID del pedido, puede repetirse |
+| order_date | DATE | Fecha del pedido, no nula |
+| ship_date | DATE | Fecha de envío, posterior o igual al pedido |
+| ship_mode | STRING | Tipo de envío |
+| customer_id | STRING | ID del cliente |
+| customer_name | STRING | Nombre del cliente |
+| segment | STRING | Segmento del cliente |
+| country | STRING | País |
+| city | STRING | Ciudad |
+| state | STRING | Estado |
+| postal_code | STRING | Código postal de 5 dígitos |
+| region | STRING | Región |
+| product_id | STRING | ID del producto |
+| category | STRING | Categoría |
+| sub_category | STRING | Subcategoría |
+| product_name | STRING | Nombre del producto |
+| sales | DECIMAL(12,4) | Venta, valor positivo esperado |
+| quantity | INT | Cantidad, mínimo 1 |
+| discount | DECIMAL(4,2) | Descuento entre 0 y 1 |
+| profit | DECIMAL(12,4) | Ganancia, puede ser negativa |
 
-### Interpretación
+**Consulta:** `pregunta1.sql`
 
-Los 9.994 registros no presentan duplicados, valores nulos ni errores en fechas, ventas o descuentos. Esto indica que los datos tienen buena calidad para realizar los análisis.
+**Resultado:** Se cargaron 9.994 registros, con 5.009 órdenes y 793 clientes únicos. Las ventas fueron 2.297.200,86 y las ganancias 286.397,02.
 
-### Conclusión
-Los datos son consistentes y se pueden usar sin limpieza adicional en las siguientes preguntas.
+**Interpretación:** Se conservaron todos los registros y se corrigió el formato de fechas y códigos postales.
 
-## Pregunta 3. Evolución comercial por región
+**Conclusión:** La tabla quedó preparada para los análisis.
 
-### Estrategia
-[pregunta3.sql](pregunta3.sql) tiene dos consultas con CTE sobre `ventas`. La primera agrupa ventas y ganancia por región y año, calcula el margen (ganancia / ventas × 100) y la variación anual de ventas con `LAG()` particionado por región. La segunda suma todos los años por región y usa `RANK()` para ubicar la mejor y la peor. Criterio: **ventas totales 2014–2017**; también muestro el ranking por ganancia y el margen para contrastar.
+## Pregunta 2. Calidad de datos
 
-```
-docker cp pregunta3.sql hive4_superstore:/tmp/pregunta3.sql
-docker exec hive4_superstore beeline -u "jdbc:hive2://localhost:10000/" -f /tmp/pregunta3.sql
-```
+Se revisaron registros duplicados, nulos, fechas, ventas y descuentos.
 
-### Resultados principales (ejecutados en Hive)
+**Consulta:** `pregunta2.sql`
 
-| Región | Ventas 2014–2017 | Ganancia | Margen % | Rank ventas | Rank ganancia |
-|---|---|---|---|---|---|
-| West | 725.457,82 | 108.418,45 | 14,94 | 1 (mejor) | 1 |
-| East | 678.781,24 | 91.522,78 | 13,48 | 2 | 2 |
-| Central | 501.239,89 | 39.706,36 | 7,92 | 3 | 4 |
-| South | 391.721,91 | 46.749,43 | 11,93 | 4 (peor) | 3 |
+| Control | Resultado |
+|---|---|
+| Registros | 9.994 |
+| ID duplicados | 0 |
+| Órdenes únicas | 5.009 |
+| Clientes únicos | 793 |
+| Valores nulos o vacíos | 0 |
+| Fechas inválidas | 0 |
+| Envíos anteriores al pedido | 0 |
+| Ventas menores o iguales a cero | 0 |
+| Descuentos fuera de rango | 0 |
 
-Ventas 2017 respecto a 2016: West +33,42 %, East +17,93 %, South +31,30 %, Central −0,22 %. El detalle por región y año (ventas, ganancia, margen y variación) sale en la primera consulta.
+**Tratamiento:** Si se encontraran errores, se revisarían los datos originales para corregirlos o excluir los registros afectados.
 
-### Interpretación
-West es la mejor región por ventas, ganancia y margen, y East la sigue de cerca. South vende menos, pero gana más que Central y tiene mejor margen. Central tiene el peor margen (7,92 %), que en 2014 fue solo 0,52 %, y en 2017 bajó de 13,50 % a 5,13 % con las ventas estancadas. East es la única región que creció todos los años.
+**Interpretación:** No se encontraron inconsistencias en los controles realizados.
 
-### Conclusión
-Según ventas, la mejor región es West y la peor South. Según rentabilidad, la peor es Central. Con ese criterio no coinciden, por lo que conviene revisar los costos y descuentos de Central.
+**Conclusión:** Los datos pueden utilizarse para los siguientes análisis.
+
+## Pregunta 3. Ventas por región
+
+Se agruparon las ventas y ganancias por región y año. Se utilizaron CTE, `LAG()` para la variación anual y `RANK()` para la clasificación.
+
+**Consulta:** `pregunta3.sql`
+
+| Región | Ventas | Ganancia | Margen |
+|---|---|---|---|
+| West | 725.457,82 | 108.418,45 | 14,94 % |
+| East | 678.781,24 | 91.522,78 | 13,48 % |
+| Central | 501.239,89 | 39.706,36 | 7,92 % |
+| South | 391.721,91 | 46.749,43 | 11,93 % |
+
+**Interpretación:** West tiene las mayores ventas y ganancias. South registra las menores ventas y Central tiene el margen más bajo.
+
+**Conclusión:** West presenta el mejor desempeño general. Central necesita revisar su rentabilidad.
+
+## Pregunta 4. Segmentación RFM
+
+Se clasificaron los clientes utilizando:
+
+- **Recency:** días desde la última compra, respecto al 30/12/2017.
+- **Frequency:** cantidad de órdenes únicas.
+- **Monetary:** total de ventas por cliente.
+
+Se utilizaron puntuaciones de 1 a 5 mediante `NTILE(5)`.
+
+**Criterios:**
+
+- Alto valor: R ≥ 4 y M ≥ 4.
+- En riesgo: R ≤ 2 y (F ≥ 3 o M ≥ 3).
+- Recurrente: F ≥ 4, si no pertenece a los anteriores.
+- Otros: clientes restantes.
+
+**Consulta:** `pregunta4.sql`
+
+| Segmento | Clientes | Ventas |
+|---|---|---|
+| Alto valor | 146 | 760.684,20 |
+| En riesgo | 196 | 689.323,63 |
+| Otros | 326 | 461.967,25 |
+| Recurrente | 125 | 385.225,78 |
+
+**Interpretación:** Los clientes de alto valor generan el 33,11 % de las ventas. Los clientes en riesgo representan el 30,01 % y llevan más tiempo sin comprar.
+
+**Conclusión:** Es importante mantener a los clientes de alto valor y recuperar a los clientes en riesgo.
+
+## Evidencias
+
+Las capturas de ejecución y resultados de cada pregunta están guardadas en la carpeta `evidencias`.
